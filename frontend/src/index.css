@@ -723,3 +723,64 @@ tr:hover td { background: var(--bg2); }
 
 /* Scrollable section */
 .scroll-section { overflow-y: auto; max-height: 400px; }
+
+/* ===== MOBILE / RESPONSIVE ===== */
+@media (max-width: 768px) {
+  :root { --sidebar-w: 240px; }
+
+  .app-layout { position: relative; }
+
+  /* Hide sidebar by default on mobile - controlled by JS */
+  .sidebar {
+    position: fixed !important;
+    top: 0; left: 0; bottom: 0;
+    z-index: 100;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+    width: var(--sidebar-w) !important;
+  }
+
+  .sidebar.mobile-open {
+    transform: translateX(0);
+  }
+
+  .mobile-overlay { display: block !important; }
+  .mobile-topbar { display: flex !important; }
+
+  .main-content { width: 100vw; }
+  .page { padding: 16px; }
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  .chat-layout { flex-direction: column; height: calc(100vh - 50px); }
+  .chat-list { width: 100%; height: 200px; border-right: none; border-bottom: 1px solid var(--border); }
+  .id-card { max-width: 100%; }
+  .modal { margin: 10px; max-width: calc(100vw - 20px) !important; }
+}
+
+@media (max-width: 480px) {
+  .page-title { font-size: 14px; letter-spacing: 2px; }
+  .btn { padding: 6px 12px; font-size: 12px; }
+  .tabs { flex-wrap: wrap; }
+  .tab { font-size: 10px; padding: 8px 12px; }
+  table { font-size: 12px; }
+  th, td { padding: 8px 6px; }
+}
+
+/* Collapsed sidebar nav items */
+.sidebar .nav-item {
+  position: relative;
+}
+
+/* Personnel status indicator dot */
+.status-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 6px;
+}
+
+/* ID Card responsive */
+@media (max-width: 600px) {
+  .id-card { padding: 14px; }
+  .id-card-name { font-size: 16px; }
+  .id-card-cl-badge { font-size: 22px; }
+}

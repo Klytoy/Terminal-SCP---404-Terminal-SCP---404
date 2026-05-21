@@ -1,5 +1,6 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { AnimatePresence } from 'framer-motion';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
 import LoginPage from './pages/LoginPage';
@@ -11,6 +12,10 @@ import DocumentsPage from './pages/DocumentsPage';
 import CommsPage from './pages/CommsPage';
 import AdminPage from './pages/AdminPage';
 import RequestsPage from './pages/RequestsPage';
+import SCPArchivePage from './pages/SCPArchivePage';
+import WantedPage from './pages/WantedPage';
+import LinkedOrgsPage from './pages/LinkedOrgsPage';
+import PersonnelPage from './pages/PersonnelPage';
 import './index.css';
 
 const ProtectedRoute = ({ children, adminOnly }) => {
@@ -28,6 +33,28 @@ const PublicRoute = ({ children }) => {
   return children;
 };
 
+function AnimatedRoutes() {
+  const location = useLocation();
+  return (
+    <AnimatePresence mode="wait">
+      <Routes location={location} key={location.pathname}>
+        <Route index element={<DashboardPage />} />
+        <Route path="profile" element={<ProfilePage />} />
+        <Route path="profile/:id" element={<ProfilePage />} />
+        <Route path="fractions" element={<FractionsPage />} />
+        <Route path="personnel" element={<PersonnelPage />} />
+        <Route path="documents" element={<DocumentsPage />} />
+        <Route path="scp" element={<SCPArchivePage />} />
+        <Route path="wanted" element={<WantedPage />} />
+        <Route path="linked-orgs" element={<LinkedOrgsPage />} />
+        <Route path="comms" element={<CommsPage />} />
+        <Route path="requests" element={<RequestsPage />} />
+        <Route path="admin" element={<ProtectedRoute adminOnly><AdminPage /></ProtectedRoute>} />
+      </Routes>
+    </AnimatePresence>
+  );
+}
+
 function App() {
   return (
     <AuthProvider>
@@ -36,14 +63,7 @@ function App() {
           <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
           <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
           <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-            <Route index element={<DashboardPage />} />
-            <Route path="profile" element={<ProfilePage />} />
-            <Route path="profile/:id" element={<ProfilePage />} />
-            <Route path="fractions" element={<FractionsPage />} />
-            <Route path="documents" element={<DocumentsPage />} />
-            <Route path="comms" element={<CommsPage />} />
-            <Route path="requests" element={<RequestsPage />} />
-            <Route path="admin" element={<ProtectedRoute adminOnly><AdminPage /></ProtectedRoute>} />
+            <Route path="*" element={<AnimatedRoutes />} />
           </Route>
         </Routes>
       </BrowserRouter>

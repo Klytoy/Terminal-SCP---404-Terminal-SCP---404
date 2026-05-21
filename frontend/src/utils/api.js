@@ -71,3 +71,41 @@ export const requestTwin = (data) => api.post('/twins/request', data);
 export const getMyTwins = () => api.get('/twins/my');
 
 export default api;
+
+// SCP Objects
+export const getSCPs = (params) => api.get('/scp', { params });
+export const getSCP = (id) => api.get(`/scp/${id}`);
+export const createSCP = (data) => api.post('/scp', data);
+export const updateSCP = (id, data) => api.patch(`/scp/${id}`, data);
+export const deleteSCP = (id) => api.delete(`/scp/${id}`);
+
+// Factions
+export const getFactions = (params) => api.get('/factions', { params });
+export const createFaction = (data) => api.post('/factions', data);
+export const updateFaction = (id, data) => api.patch(`/factions/${id}`, data);
+export const deleteFaction = (id) => api.delete(`/factions/${id}`);
+
+// Wanted
+export const getWanted = (params) => api.get('/wanted', { params });
+export const createWanted = (data) => api.post('/wanted', data);
+export const updateWanted = (id, data) => api.patch(`/wanted/${id}`, data);
+export const deleteWanted = (id) => api.delete(`/wanted/${id}`);
+
+// Linked Orgs
+export const getLinkedOrgs = () => api.get('/linked-orgs');
+export const createLinkedOrg = (data) => api.post('/linked-orgs', data);
+export const updateLinkedOrg = (id, data) => api.patch(`/linked-orgs/${id}`, data);
+export const deleteLinkedOrg = (id) => api.delete(`/linked-orgs/${id}`);
+
+// Logs
+export const getLogs = (params) => api.get('/logs', { params });
+
+// Personnel records (база УД)
+export const getPersonnel = (params) => api.get('/personnel', { params });
+export const getPersonnelById = (id) => api.get(`/personnel/${id}`);
+export const createPersonnel = (data) => api.post('/personnel', data);
+export const updatePersonnel = (id, data) => api.patch(`/personnel/${id}`, data);
+export const deletePersonnel = (id) => api.delete(`/personnel/${id}`);
+
+// Full user edit by admin
+export const updateUserPersonnel = (id, data) => api.patch(`/users/${id}/personnel`, data);

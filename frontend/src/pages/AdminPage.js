@@ -425,3 +425,4 @@ export default function AdminPage() {
     </div>
   );
 }
+// Logs tab component - append to existing AdminPage
