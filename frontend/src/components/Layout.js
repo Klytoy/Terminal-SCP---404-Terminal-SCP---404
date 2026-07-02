@@ -63,7 +63,7 @@ export default function Layout() {
       <motion.aside
         animate={{ width: sidebarW }}
         transition={{ duration: 0.2, ease: 'easeInOut' }}
-        className="sidebar"
+        className={`sidebar${mobileOpen ? ' mobile-open' : ''}`}
         style={{ width: sidebarW, overflow: 'hidden', flexShrink: 0 }}
       >
         {/* Logo + collapse button */}
@@ -133,6 +133,11 @@ export default function Layout() {
             <NavItem to="/wanted" icon="⚠" label="Розыск" collapsed={collapsed} />
           </NavSection>
 
+          <NavSection title="СПЕЦИАЛЬНОЕ" collapsed={collapsed}>
+            <NavItem to="/terminal" icon="▶" label="Терминал" collapsed={collapsed} />
+            <NavItem to="/blackmarket" icon="◈" label="Чёрный рынок" collapsed={collapsed} />
+          </NavSection>
+
           <NavSection title="КОММУНИКАЦИИ" collapsed={collapsed}>
             <NavItem to="/comms" icon="◎" label="Связь" badge={totalNotifications} collapsed={collapsed} />
             <NavItem to="/requests" icon="◬" label="Запросы" collapsed={collapsed} />
@@ -173,7 +178,7 @@ export default function Layout() {
         {commsBlocked && <div className="comms-blocked-banner">⚠ ВСЕ КАНАЛЫ СВЯЗИ ЗАБЛОКИРОВАНЫ КОМАНДОВАНИЕМ ⚠</div>}
 
         {/* Mobile top bar */}
-        <div className="mobile-topbar" style={{ display: 'none', padding: '10px 16px', background: 'var(--bg2)', borderBottom: '1px solid var(--border)', alignItems: 'center', gap: 12 }}>
+        <div className="mobile-topbar" style={{ display: 'flex', padding: '10px 16px', background: 'var(--bg2)', borderBottom: '1px solid var(--border)', alignItems: 'center', gap: 12 }}>
           <button onClick={() => setMobileOpen(o => !o)} style={{ background: 'none', border: '1px solid var(--border)', color: 'var(--text)', padding: '6px 10px', borderRadius: 4, cursor: 'pointer' }}>☰</button>
           <span style={{ fontFamily: 'var(--font-head)', fontSize: 14, color: 'var(--accent)', letterSpacing: 2 }}>SCP PORTAL</span>
           <span className={`cl-${user?.clearanceLevel}`} style={{ marginLeft: 'auto', fontFamily: 'var(--font-head)', fontWeight: 900 }}>УД-{user?.clearanceLevel}</span>
