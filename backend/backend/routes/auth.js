@@ -4,13 +4,6 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Request = require('../models/Request');
 
-// Экранирует спецсимволы regex, чтобы искать username буквально
-const escapeRegex = (str = '') => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-// Регистронезависимый точный поиск по username (телефоны авто-капитализируют первую букву)
-const findByUsernameCI = (username) =>
-  User.findOne({ username: new RegExp(`^${escapeRegex((username || '').trim())}$`, 'i') });
-
 // POST /api/auth/register - Submit registration form (creates pending request)
 router.post('/register', async (req, res) => {
   try {
@@ -25,8 +18,8 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ message: 'All required fields must be filled' });
     }
 
-    // Check username exists (регистронезависимо)
-    const existingUser = await findByUsernameCI(username);
+    // Check username exists
+    const existingUser = await User.findOne({ username });
     if (existingUser) return res.status(400).json({ message: 'Username already taken' });
 
     // Validate discord nick format
@@ -63,8 +56,8 @@ router.post('/register', async (req, res) => {
 router.post('/login', async (req, res) => {
   try {
     const { username, password } = req.body;
-
-    const user = await findByUsernameCI(username);
+    
+    const user = await User.findOne({ username });
     if (!user) return res.status(400).json({ message: 'Invalid credentials' });
     
     if (user.status === 'pending') {

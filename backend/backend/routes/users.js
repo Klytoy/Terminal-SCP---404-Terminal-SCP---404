@@ -1,129 +1,126 @@
 const express = require('express');
 const router = express.Router();
-const { auth, requireRole } = require('../middleware/auth');
+const { auth, adminOnly } = require('../middleware/auth');
 const User = require('../models/User');
+const bcrypt = require('bcryptjs');
 
-router.use(auth);
-
-// GET /api/users - search users
-router.get('/', async (req, res) => {
+// Все пользователи (для админа)
+router.get('/', auth, adminOnly, async (req, res) => {
   try {
-    const { search, fraction, clearanceLevel, personnelStatus } = req.query;
-    const filter = { status: 'approved' };
-    if (search) {
-      filter.$or = [
-        { username: { $regex: search, $options: 'i' } },
-        { fio: { $regex: search, $options: 'i' } },
-        { callsign: { $regex: search, $options: 'i' } },
-        { employeeId: { $regex: search, $options: 'i' } }
-      ];
-    }
-    if (fraction) filter.fraction = fraction;
-    if (clearanceLevel !== undefined) filter.clearanceLevel = parseInt(clearanceLevel);
-    if (personnelStatus) filter.personnelStatus = personnelStatus;
-    
-    const users = await User.find(filter)
-      .select('-password')
-      .populate('parentAccount', 'username fio employeeId')
-      .sort('fio');
-    
-    // Non-admins can't see users with higher clearance level details
-    const isAdmin = req.user.role === 'admin' || req.user.role === 'superadmin';
+    const users = await User.find().select('-password').sort({ createdAt: -1 });
+    res.json(users);
+  } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+// Персонал — с фильтром по УД
+router.get('/personnel', auth, async (req, res) => {
+  try {
+    const me = await User.findById(req.user.userId);
+    const myLevel = me?.clearanceLevel || 0;
+    const isAdmin = ['superadmin', 'admin'].includes(req.user.role);
+    const users = await User.find({ status: 'approved' }).select('-password');
+
     const result = users.map(u => {
-      const obj = u.toSafeObject();
-      if (!isAdmin && u.clearanceLevel > req.user.clearanceLevel) {
+      if (!isAdmin && u.clearanceLevel > myLevel) {
         return {
-          _id: u._id,
-          callsign: '[ЗАСЕКРЕЧЕНО]',
-          fio: '[ЗАСЕКРЕЧЕНО]',
-          fraction: u.fraction,
-          fractionType: u.fractionType,
-          clearanceLevel: u.clearanceLevel,
-          position: '[ЗАСЕКРЕЧЕНО]',
-          personnelStatus: u.personnelStatus,
-          isRedacted: true
+          _id: u._id, callsign: '█████', fio: '█████ █████',
+          position: '█████', fraction: u.fraction, fractionType: u.fractionType,
+          clearanceLevel: u.clearanceLevel, personnelStatus: u.personnelStatus,
+          classified: true
         };
+      }
+      // Показать фальшивую личность если включена
+      const obj = u.toSafeObject();
+      if (u.fakeIdentity?.enabled && !isAdmin) {
+        obj.fraction = u.fakeIdentity.fakeFraction || u.fraction;
+        obj.position = u.fakeIdentity.fakePosition || u.position;
+        obj.fio = u.fakeIdentity.fakeFio || u.fio;
+        obj.callsign = u.fakeIdentity.fakeCallsign || u.callsign;
+        obj.employeeId = u.fakeIdentity.fakeEmployeeId || u.employeeId;
+        obj.hasAltIdentity = false; // скрываем факт подмены
       }
       return obj;
     });
     res.json(result);
-  } catch (err) {
-    res.status(500).json({ message: 'Server error' });
-  }
+  } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
-// GET /api/users/:id
-router.get('/:id', async (req, res) => {
+// Один пользователь
+router.get('/:id', auth, async (req, res) => {
   try {
-    const user = await User.findById(req.params.id)
-      .select('-password')
-      .populate('parentAccount', 'username fio employeeId');
-    if (!user) return res.status(404).json({ message: 'User not found' });
-    
-    const isAdmin = req.user.role === 'admin' || req.user.role === 'superadmin';
-    const isSelf = user._id.toString() === req.user._id.toString();
-    
-    if (!isAdmin && !isSelf && user.clearanceLevel > req.user.clearanceLevel) {
-      return res.status(403).json({ message: 'Insufficient clearance' });
-    }
-    res.json(user.toSafeObject());
-  } catch (err) {
-    res.status(500).json({ message: 'Server error' });
-  }
+    const user = await User.findById(req.params.id).select('-password');
+    if (!user) return res.status(404).json({ message: 'Не найден' });
+    res.json(user);
+  } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
-// PATCH /api/users/me/callsign
-router.patch('/me/callsign', async (req, res) => {
+// Полное редактирование (только админ/суперадмин)
+router.put('/:id', auth, adminOnly, async (req, res) => {
   try {
-    const { callsign } = req.body;
-    if (!callsign) return res.status(400).json({ message: 'Callsign required' });
+    const { password, ...rest } = req.body;
+    const update = { ...rest, updatedAt: new Date() };
+    if (password) update.password = await bcrypt.hash(password, 12);
+
+    // Только суперадмин может менять роль
+    if (rest.role && req.user.role !== 'superadmin') delete update.role;
+
+    // Не даём изменять суперадмина обычному админу
+    const target = await User.findById(req.params.id);
+    if (target?.role === 'superadmin' && req.user.role !== 'superadmin')
+      return res.status(403).json({ message: 'Нет доступа' });
+
+    const user = await User.findByIdAndUpdate(req.params.id, update, { new: true }).select('-password');
+    res.json(user);
+  } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+// Добавить пометку в личное дело
+router.post('/:id/notes', auth, adminOnly, async (req, res) => {
+  try {
+    const me = await User.findById(req.user.userId);
+    const { type, text } = req.body;
     const user = await User.findByIdAndUpdate(
-      req.user._id, { callsign, updatedAt: new Date() }, { new: true }
+      req.params.id,
+      { $push: { personnelNotes: { type, text, author: req.user.userId, authorName: me.callsign } } },
+      { new: true }
     ).select('-password');
     res.json(user);
-  } catch (err) {
-    res.status(500).json({ message: 'Server error' });
-  }
+  } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
-// PATCH /api/users/me/mute
-router.patch('/me/mute', async (req, res) => {
+// Удалить пометку
+router.delete('/:id/notes/:noteId', auth, adminOnly, async (req, res) => {
   try {
-    const { conversationId, muted } = req.body;
-    const update = muted
-      ? { $addToSet: { mutedConversations: conversationId } }
-      : { $pull: { mutedConversations: conversationId } };
-    const user = await User.findByIdAndUpdate(req.user._id, update, { new: true }).select('-password');
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { $pull: { personnelNotes: { _id: req.params.noteId } } },
+      { new: true }
+    ).select('-password');
     res.json(user);
-  } catch (err) {
-    res.status(500).json({ message: 'Server error' });
-  }
+  } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
-// PATCH /api/users/:id/personnel - superadmin full edit
-router.patch('/:id/personnel', requireRole('admin', 'superadmin'), async (req, res) => {
+// Начислить/снять баланс
+router.patch('/:id/balance', auth, adminOnly, async (req, res) => {
   try {
-    const allowed = [
-      'fio', 'callsign', 'fraction', 'fractionType', 'position',
-      'clearanceLevel', 'clearanceExtensions', 'personnelStatus',
-      'biography', 'photo', 'employeeId', 'discordNick', 'serviceIds'
-    ];
-    // superadmin can also change role and status
-    if (req.user.role === 'superadmin') {
-      allowed.push('role', 'status');
-    }
-    const updates = {};
-    for (const key of allowed) {
-      if (req.body[key] !== undefined) updates[key] = req.body[key];
-    }
-    updates.updatedAt = new Date();
-    
-    const user = await User.findByIdAndUpdate(req.params.id, { $set: updates }, { new: true }).select('-password');
-    if (!user) return res.status(404).json({ message: 'User not found' });
-    res.json(user.toSafeObject());
-  } catch (err) {
-    res.status(500).json({ message: 'Server error' });
-  }
+    const { amount, operation } = req.body; // operation: 'add' | 'subtract' | 'set'
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: 'Не найден' });
+    if (operation === 'add') user.balance = (user.balance || 0) + amount;
+    else if (operation === 'subtract') user.balance = Math.max(0, (user.balance || 0) - amount);
+    else user.balance = amount;
+    await user.save();
+    res.json({ balance: user.balance });
+  } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+// Удалить пользователя (только суперадмин)
+router.delete('/:id', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'superadmin') return res.status(403).json({ message: 'Только суперадмин' });
+    await User.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Удалён' });
+  } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
 module.exports = router;
