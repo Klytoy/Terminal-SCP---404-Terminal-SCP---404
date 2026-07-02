@@ -4,14 +4,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { getClearanceInfo } from '../utils/clearance';
 
-const NavItem = ({ to, icon, label, badge, collapsed, onNavigate }) => (
+const NavItem = ({ to, icon, label, badge, collapsed }) => (
   <NavLink
     to={to}
     end={to === '/'}
     className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
     title={collapsed ? label : undefined}
     style={collapsed ? { justifyContent: 'center', padding: '10px 0' } : {}}
-    onClick={onNavigate}
   >
     <span style={{ fontSize: 16, minWidth: 18, textAlign: 'center' }}>{icon}</span>
     <AnimatePresence>
@@ -47,7 +46,6 @@ export default function Layout() {
   const isAdmin = user?.role === 'admin' || user?.role === 'superadmin';
 
   const sidebarW = collapsed ? 56 : 240;
-  const closeMobile = () => setMobileOpen(false);
 
   return (
     <div className="app-layout" style={{ position: 'relative' }}>
@@ -55,7 +53,7 @@ export default function Layout() {
       {/* Mobile overlay */}
       {mobileOpen && (
         <div
-          onClick={closeMobile}
+          onClick={() => setMobileOpen(false)}
           style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 99, display: 'none' }}
           className="mobile-overlay"
         />
@@ -65,7 +63,7 @@ export default function Layout() {
       <motion.aside
         animate={{ width: sidebarW }}
         transition={{ duration: 0.2, ease: 'easeInOut' }}
-        className={`sidebar ${mobileOpen ? 'mobile-open' : ''}`}
+        className={`sidebar${mobileOpen ? ' mobile-open' : ''}`}
         style={{ width: sidebarW, overflow: 'hidden', flexShrink: 0 }}
       >
         {/* Logo + collapse button */}
@@ -119,30 +117,35 @@ export default function Layout() {
         {/* Nav */}
         <div style={{ overflowY: 'auto', flex: 1 }}>
           <NavSection title="ГЛАВНОЕ" collapsed={collapsed}>
-            <NavItem to="/" icon="⬡" label="Главная" collapsed={collapsed} onNavigate={closeMobile} />
-            <NavItem to="/profile" icon="◈" label="Мой УД" collapsed={collapsed} onNavigate={closeMobile} />
+            <NavItem to="/" icon="⬡" label="Главная" collapsed={collapsed} />
+            <NavItem to="/profile" icon="◈" label="Мой УД" collapsed={collapsed} />
           </NavSection>
 
           <NavSection title="ФРАКЦИИ И ПЕРСОНАЛ" collapsed={collapsed}>
-            <NavItem to="/fractions" icon="◫" label="Фракции" collapsed={collapsed} onNavigate={closeMobile} />
-            <NavItem to="/personnel" icon="👤" label="Персонал" collapsed={collapsed} onNavigate={closeMobile} />
+            <NavItem to="/fractions" icon="◫" label="Фракции" collapsed={collapsed} />
+            <NavItem to="/personnel" icon="👤" label="Персонал" collapsed={collapsed} />
           </NavSection>
 
           <NavSection title="БАЗА ЗНАНИЙ" collapsed={collapsed}>
-            <NavItem to="/scp" icon="☢" label="Архив SCP" collapsed={collapsed} onNavigate={closeMobile} />
-            <NavItem to="/documents" icon="◧" label="Документация" collapsed={collapsed} onNavigate={closeMobile} />
-            <NavItem to="/linked-orgs" icon="◉" label="Связанные орг." collapsed={collapsed} onNavigate={closeMobile} />
-            <NavItem to="/wanted" icon="⚠" label="Розыск" collapsed={collapsed} onNavigate={closeMobile} />
+            <NavItem to="/scp" icon="☢" label="Архив SCP" collapsed={collapsed} />
+            <NavItem to="/documents" icon="◧" label="Документация" collapsed={collapsed} />
+            <NavItem to="/linked-orgs" icon="◉" label="Связанные орг." collapsed={collapsed} />
+            <NavItem to="/wanted" icon="⚠" label="Розыск" collapsed={collapsed} />
+          </NavSection>
+
+          <NavSection title="СПЕЦИАЛЬНОЕ" collapsed={collapsed}>
+            <NavItem to="/terminal" icon="▶" label="Терминал" collapsed={collapsed} />
+            <NavItem to="/blackmarket" icon="◈" label="Чёрный рынок" collapsed={collapsed} />
           </NavSection>
 
           <NavSection title="КОММУНИКАЦИИ" collapsed={collapsed}>
-            <NavItem to="/comms" icon="◎" label="Связь" badge={totalNotifications} collapsed={collapsed} onNavigate={closeMobile} />
-            <NavItem to="/requests" icon="◬" label="Запросы" collapsed={collapsed} onNavigate={closeMobile} />
+            <NavItem to="/comms" icon="◎" label="Связь" badge={totalNotifications} collapsed={collapsed} />
+            <NavItem to="/requests" icon="◬" label="Запросы" collapsed={collapsed} />
           </NavSection>
 
           {isAdmin && (
             <NavSection title="УПРАВЛЕНИЕ" collapsed={collapsed}>
-              <NavItem to="/admin" icon="⬢" label="Панель админа" collapsed={collapsed} onNavigate={closeMobile} />
+              <NavItem to="/admin" icon="⬢" label="Панель админа" collapsed={collapsed} />
             </NavSection>
           )}
         </div>
@@ -175,7 +178,7 @@ export default function Layout() {
         {commsBlocked && <div className="comms-blocked-banner">⚠ ВСЕ КАНАЛЫ СВЯЗИ ЗАБЛОКИРОВАНЫ КОМАНДОВАНИЕМ ⚠</div>}
 
         {/* Mobile top bar */}
-        <div className="mobile-topbar" style={{ display: 'none', padding: '10px 16px', background: 'var(--bg2)', borderBottom: '1px solid var(--border)', alignItems: 'center', gap: 12 }}>
+        <div className="mobile-topbar" style={{ display: 'flex', padding: '10px 16px', background: 'var(--bg2)', borderBottom: '1px solid var(--border)', alignItems: 'center', gap: 12 }}>
           <button onClick={() => setMobileOpen(o => !o)} style={{ background: 'none', border: '1px solid var(--border)', color: 'var(--text)', padding: '6px 10px', borderRadius: 4, cursor: 'pointer' }}>☰</button>
           <span style={{ fontFamily: 'var(--font-head)', fontSize: 14, color: 'var(--accent)', letterSpacing: 2 }}>SCP PORTAL</span>
           <span className={`cl-${user?.clearanceLevel}`} style={{ marginLeft: 'auto', fontFamily: 'var(--font-head)', fontWeight: 900 }}>УД-{user?.clearanceLevel}</span>
