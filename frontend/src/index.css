@@ -754,6 +754,12 @@ tr:hover td { background: var(--bg2); }
   .chat-list { width: 100%; height: 200px; border-right: none; border-bottom: 1px solid var(--border); }
   .id-card { max-width: 100%; }
   .modal { margin: 10px; max-width: calc(100vw - 20px) !important; }
+
+  /* iOS Safari авто-зумит страницу при фокусе на input с font-size < 16px —
+     из-за этого при входе с телефона "ломается" вёрстка после тапа в поле */
+  .form-input, .form-select, textarea, select, input {
+    font-size: 16px !important;
+  }
 }
 
 @media (max-width: 480px) {

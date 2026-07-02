@@ -15,8 +15,9 @@ router.post('/request', async (req, res) => {
       return res.status(400).json({ message: 'All fields required' });
     }
     
-    // Check username not taken
-    const existing = await User.findOne({ username: twinUsername });
+    // Check username not taken (регистронезависимо)
+    const escapeRegex = (str = '') => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const existing = await User.findOne({ username: new RegExp(`^${escapeRegex(twinUsername.trim())}$`, 'i') });
     if (existing) return res.status(400).json({ message: 'Username already taken' });
     
     const pending = await Request.findOne({

@@ -88,6 +88,9 @@ export default function LoginPage() {
                 onChange={e => setForm(p => ({ ...p, username: e.target.value }))}
                 required
                 autoComplete="username"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck="false"
               />
             </div>
             <div className="form-group">

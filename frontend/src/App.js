@@ -16,8 +16,6 @@ import SCPArchivePage from './pages/SCPArchivePage';
 import WantedPage from './pages/WantedPage';
 import LinkedOrgsPage from './pages/LinkedOrgsPage';
 import PersonnelPage from './pages/PersonnelPage';
-import BlackMarketPage from './pages/BlackMarketPage';
-import TerminalPage from './pages/TerminalPage';
 import './index.css';
 
 const ProtectedRoute = ({ children, adminOnly }) => {
@@ -51,8 +49,6 @@ function AnimatedRoutes() {
         <Route path="linked-orgs" element={<LinkedOrgsPage />} />
         <Route path="comms" element={<CommsPage />} />
         <Route path="requests" element={<RequestsPage />} />
-        <Route path="blackmarket" element={<BlackMarketPage />} />
-        <Route path="terminal" element={<TerminalPage />} />
         <Route path="admin" element={<ProtectedRoute adminOnly><AdminPage /></ProtectedRoute>} />
       </Routes>
     </AnimatePresence>

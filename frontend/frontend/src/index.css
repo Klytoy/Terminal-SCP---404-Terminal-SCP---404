@@ -754,6 +754,12 @@ tr:hover td { background: var(--bg2); }
   .chat-list { width: 100%; height: 200px; border-right: none; border-bottom: 1px solid var(--border); }
   .id-card { max-width: 100%; }
   .modal { margin: 10px; max-width: calc(100vw - 20px) !important; }
+
+  /* iOS Safari авто-зумит страницу при фокусе на input с font-size < 16px —
+     из-за этого при входе с телефона "ломается" вёрстка после тапа в поле */
+  .form-input, .form-select, textarea, select, input {
+    font-size: 16px !important;
+  }
 }
 
 @media (max-width: 480px) {
@@ -783,54 +789,4 @@ tr:hover td { background: var(--bg2); }
   .id-card { padding: 14px; }
   .id-card-name { font-size: 16px; }
   .id-card-cl-badge { font-size: 22px; }
-}
-
-/* ===== MOBILE FIX v4 ===== */
-@media (max-width: 768px) {
-  .app-layout { flex-direction: column; }
-  .sidebar {
-    position: fixed !important;
-    left: -280px;
-    top: 0; bottom: 0;
-    width: 260px !important;
-    z-index: 200;
-    transition: left 0.25s ease;
-    overflow-y: auto;
-  }
-  .sidebar.mobile-open { left: 0 !important; }
-  .mobile-overlay { display: block !important; }
-  .main-content { width: 100%; margin-left: 0 !important; }
-  .topbar { padding: 0 16px; }
-  .page { padding: 16px; }
-  .grid-2 { grid-template-columns: 1fr !important; }
-  .id-card { max-width: 100%; }
-  table { font-size: 12px; }
-  .btn { padding: 8px 12px; font-size: 12px; }
-  .form-input, .form-select { font-size: 16px !important; } /* prevent iOS zoom */
-}
-
-/* Balance badge */
-.balance-badge {
-  background: rgba(241,196,15,0.15);
-  border: 1px solid rgba(241,196,15,0.4);
-  color: var(--yellow);
-  padding: 3px 8px;
-  border-radius: 4px;
-  font-family: var(--font-mono);
-  font-size: 12px;
-}
-
-/* Personnel note types */
-.note-violation { border-left: 3px solid var(--red); padding-left: 10px; }
-.note-warning   { border-left: 3px solid var(--orange); padding-left: 10px; }
-.note-commendation { border-left: 3px solid var(--green); padding-left: 10px; }
-.note-note { border-left: 3px solid var(--accent); padding-left: 10px; }
-
-/* Terminal */
-.terminal-screen {
-  background: #020205;
-  font-family: var(--font-mono);
-  color: var(--green);
-  border-radius: 8px;
-  padding: 16px;
 }

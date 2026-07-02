@@ -129,7 +129,7 @@ export default function RegisterPage() {
               <div className="card-title">АВТОРИЗАЦИОННЫЕ ДАННЫЕ</div>
               <div className="form-group">
                 <label className="form-label">Логин *</label>
-                <input className="form-input" value={form.username} onChange={e => set('username', e.target.value)} placeholder="username" />
+                <input className="form-input" value={form.username} onChange={e => set('username', e.target.value)} placeholder="username" autoCapitalize="none" autoCorrect="off" spellCheck="false" />
               </div>
               <div className="form-group">
                 <label className="form-label">Пароль * (мин. 6 символов)</label>
