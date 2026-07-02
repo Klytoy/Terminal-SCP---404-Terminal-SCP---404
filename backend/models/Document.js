@@ -1,28 +1,17 @@
 const mongoose = require('mongoose');
 
-const documentSchema = new mongoose.Schema({
-  title: { type: String, required: true },
-  content: { type: String, required: true },
-  category: { 
-    type: String, 
-    enum: ['scp', 'documentation', 'order', 'protocol', 'other'],
-    default: 'other'
+const documentSchema = new mongoose.Schema(
+  {
+    title: { type: String, required: true },
+    body: { type: String, default: '' },
+    category: { type: String, default: 'general' },
+    minClearance: { type: Number, min: 0, max: 6, default: 0 },
+    requiredExtension: { type: String, default: null }, // напр. 'НРП'
+    fraction: { type: String, default: null },
+    objectClass: { type: String, enum: ['SAFE', 'EUCLID', 'KETER', 'THAUMIEL', 'NEUTRALIZED', 'APOLLYON', null], default: null },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
-  subcategory: { type: String, default: '' },
-  
-  // Access control
-  minClearanceLevel: { type: Number, default: 0, min: 0, max: 6 },
-  requiredExtensions: [{ type: String }], // must have these extensions
-  allowedFractions: [{ type: String }],   // empty = all fractions
-  
-  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  
-  isArchived: { type: Boolean, default: false },
-  tags: [{ type: String }],
-  
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
-});
+  { timestamps: true }
+);
 
 module.exports = mongoose.model('Document', documentSchema);

@@ -1,126 +1,200 @@
 const express = require('express');
 const router = express.Router();
-const { auth, adminOnly } = require('../middleware/auth');
+
 const User = require('../models/User');
-const bcrypt = require('bcryptjs');
+const { auth, requireRole } = require('../middleware/auth');
+const { hasExtension, isAdmin } = require('../config/extensions');
+const createLog = require('../utils/createLog');
 
-// Все пользователи (для админа)
-router.get('/', auth, adminOnly, async (req, res) => {
-  try {
-    const users = await User.find().select('-password').sort({ createdAt: -1 });
-    res.json(users);
-  } catch (e) { res.status(500).json({ message: e.message }); }
+// GET /api/users — общий список сотрудников (карточки)
+router.get('/', auth, async (req, res) => {
+  const users = await User.find({}, '-passwordHash').sort({ fio: 1 });
+  res.json({ users });
 });
 
-// Персонал — с фильтром по УД
-router.get('/personnel', auth, async (req, res) => {
-  try {
-    const me = await User.findById(req.user.userId);
-    const myLevel = me?.clearanceLevel || 0;
-    const isAdmin = ['superadmin', 'admin'].includes(req.user.role);
-    const users = await User.find({ status: 'approved' }).select('-password');
-
-    const result = users.map(u => {
-      if (!isAdmin && u.clearanceLevel > myLevel) {
-        return {
-          _id: u._id, callsign: '█████', fio: '█████ █████',
-          position: '█████', fraction: u.fraction, fractionType: u.fractionType,
-          clearanceLevel: u.clearanceLevel, personnelStatus: u.personnelStatus,
-          classified: true
-        };
-      }
-      // Показать фальшивую личность если включена
-      const obj = u.toSafeObject();
-      if (u.fakeIdentity?.enabled && !isAdmin) {
-        obj.fraction = u.fakeIdentity.fakeFraction || u.fraction;
-        obj.position = u.fakeIdentity.fakePosition || u.position;
-        obj.fio = u.fakeIdentity.fakeFio || u.fio;
-        obj.callsign = u.fakeIdentity.fakeCallsign || u.callsign;
-        obj.employeeId = u.fakeIdentity.fakeEmployeeId || u.employeeId;
-        obj.hasAltIdentity = false; // скрываем факт подмены
-      }
-      return obj;
-    });
-    res.json(result);
-  } catch (e) { res.status(500).json({ message: e.message }); }
-});
-
-// Один пользователь
+// GET /api/users/:id
 router.get('/:id', auth, async (req, res) => {
-  try {
-    const user = await User.findById(req.params.id).select('-password');
-    if (!user) return res.status(404).json({ message: 'Не найден' });
-    res.json(user);
-  } catch (e) { res.status(500).json({ message: e.message }); }
+  const user = await User.findById(req.params.id, '-passwordHash');
+  if (!user) return res.status(404).json({ error: 'Сотрудник не найден' });
+  res.json({ user });
 });
 
-// Полное редактирование (только админ/суперадмин)
-router.put('/:id', auth, adminOnly, async (req, res) => {
-  try {
-    const { password, ...rest } = req.body;
-    const update = { ...rest, updatedAt: new Date() };
-    if (password) update.password = await bcrypt.hash(password, 12);
+// ---------------------------------------------------------------------
+// Личное дело: нарушения / поощрения (п.3)
+// ---------------------------------------------------------------------
 
-    // Только суперадмин может менять роль
-    if (rest.role && req.user.role !== 'superadmin') delete update.role;
+function canViewNotes(reqUser, targetUser) {
+  if (isAdmin(reqUser)) return true;
+  if (hasExtension(reqUser, 'АпАИБ')) return true;
+  if (String(reqUser._id) === String(targetUser._id)) return true;
+  return false;
+}
 
-    // Не даём изменять суперадмина обычному админу
-    const target = await User.findById(req.params.id);
-    if (target?.role === 'superadmin' && req.user.role !== 'superadmin')
-      return res.status(403).json({ message: 'Нет доступа' });
+function canEditNotes(reqUser) {
+  return isAdmin(reqUser) || hasExtension(reqUser, 'АпАИБ');
+}
 
-    const user = await User.findByIdAndUpdate(req.params.id, update, { new: true }).select('-password');
-    res.json(user);
-  } catch (e) { res.status(500).json({ message: e.message }); }
+// GET /api/users/:id/notes
+router.get('/:id/notes', auth, async (req, res) => {
+  const target = await User.findById(req.params.id);
+  if (!target) return res.status(404).json({ error: 'Сотрудник не найден' });
+  if (!canViewNotes(req.user, target)) return res.status(403).json({ error: 'Нет доступа' });
+  res.json({ notes: target.personnelNotes });
 });
 
-// Добавить пометку в личное дело
-router.post('/:id/notes', auth, adminOnly, async (req, res) => {
-  try {
-    const me = await User.findById(req.user.userId);
-    const { type, text } = req.body;
-    const user = await User.findByIdAndUpdate(
-      req.params.id,
-      { $push: { personnelNotes: { type, text, author: req.user.userId, authorName: me.callsign } } },
-      { new: true }
-    ).select('-password');
-    res.json(user);
-  } catch (e) { res.status(500).json({ message: e.message }); }
+// POST /api/users/:id/notes
+router.post('/:id/notes', auth, async (req, res) => {
+  if (!canEditNotes(req.user)) return res.status(403).json({ error: 'Нет доступа' });
+  const { type, text } = req.body;
+  if (!type || !text) return res.status(400).json({ error: 'Укажите type и text' });
+
+  const target = await User.findById(req.params.id);
+  if (!target) return res.status(404).json({ error: 'Сотрудник не найден' });
+
+  const note = {
+    type,
+    text,
+    author: req.user._id,
+    authorName: req.user.callsign || req.user.fio,
+    createdAt: new Date(),
+  };
+  target.personnelNotes.push(note);
+  await target.save();
+
+  await createLog({
+    user: req.user,
+    action: 'personnel_note_add',
+    objectType: 'user',
+    objectId: target._id,
+    details: `Добавлена запись (${type}) в личное дело ${target.fio}`,
+    meta: { type, text },
+  });
+
+  res.status(201).json({ notes: target.personnelNotes });
 });
 
-// Удалить пометку
-router.delete('/:id/notes/:noteId', auth, adminOnly, async (req, res) => {
-  try {
-    const user = await User.findByIdAndUpdate(
-      req.params.id,
-      { $pull: { personnelNotes: { _id: req.params.noteId } } },
-      { new: true }
-    ).select('-password');
-    res.json(user);
-  } catch (e) { res.status(500).json({ message: e.message }); }
+// DELETE /api/users/:id/notes/:noteId
+router.delete('/:id/notes/:noteId', auth, requireRole('superadmin'), async (req, res) => {
+  const target = await User.findById(req.params.id);
+  if (!target) return res.status(404).json({ error: 'Сотрудник не найден' });
+
+  const note = target.personnelNotes.id(req.params.noteId);
+  if (!note) return res.status(404).json({ error: 'Запись не найдена' });
+  note.deleteOne();
+  await target.save();
+
+  await createLog({
+    user: req.user,
+    action: 'personnel_note_delete',
+    objectType: 'user',
+    objectId: target._id,
+    details: `Удалена запись из личного дела ${target.fio}`,
+    meta: { noteId: req.params.noteId },
+  });
+
+  res.json({ notes: target.personnelNotes });
 });
 
-// Начислить/снять баланс
-router.patch('/:id/balance', auth, adminOnly, async (req, res) => {
-  try {
-    const { amount, operation } = req.body; // operation: 'add' | 'subtract' | 'set'
-    const user = await User.findById(req.params.id);
-    if (!user) return res.status(404).json({ message: 'Не найден' });
-    if (operation === 'add') user.balance = (user.balance || 0) + amount;
-    else if (operation === 'subtract') user.balance = Math.max(0, (user.balance || 0) - amount);
-    else user.balance = amount;
-    await user.save();
-    res.json({ balance: user.balance });
-  } catch (e) { res.status(500).json({ message: e.message }); }
+// ---------------------------------------------------------------------
+// Фальшивые удостоверения (п.5)
+// ---------------------------------------------------------------------
+
+// PATCH /api/users/me/fake-identity — сам сотрудник (при наличии СО)
+router.patch('/me/fake-identity', auth, async (req, res) => {
+  if (!hasExtension(req.user, 'СО') && !isAdmin(req.user)) {
+    return res.status(403).json({ error: 'Нет доступа: требуется расширение СО' });
+  }
+  const { enabled, fakeFraction, fakePosition, fakeFio, fakeCallsign, fakeEmployeeId } = req.body;
+  req.user.fakeIdentity = {
+    enabled: !!enabled,
+    fakeFraction: fakeFraction ?? req.user.fakeIdentity?.fakeFraction ?? '',
+    fakePosition: fakePosition ?? req.user.fakeIdentity?.fakePosition ?? '',
+    fakeFio: fakeFio ?? req.user.fakeIdentity?.fakeFio ?? '',
+    fakeCallsign: fakeCallsign ?? req.user.fakeIdentity?.fakeCallsign ?? '',
+    fakeEmployeeId: fakeEmployeeId ?? req.user.fakeIdentity?.fakeEmployeeId ?? '',
+  };
+  await req.user.save();
+
+  await createLog({
+    user: req.user,
+    action: 'fake_identity_update',
+    objectType: 'user',
+    objectId: req.user._id,
+    details: `Обновлено фальшивое удостоверение (enabled=${!!enabled})`,
+  });
+
+  res.json({ fakeIdentity: req.user.fakeIdentity });
 });
 
-// Удалить пользователя (только суперадмин)
-router.delete('/:id', auth, async (req, res) => {
-  try {
-    if (req.user.role !== 'superadmin') return res.status(403).json({ message: 'Только суперадмин' });
-    await User.findByIdAndDelete(req.params.id);
-    res.json({ message: 'Удалён' });
-  } catch (e) { res.status(500).json({ message: e.message }); }
+// PATCH /api/users/:id/fake-identity — админ выставляет за другого сотрудника
+router.patch('/:id/fake-identity', auth, requireRole('admin', 'superadmin'), async (req, res) => {
+  const target = await User.findById(req.params.id);
+  if (!target) return res.status(404).json({ error: 'Сотрудник не найден' });
+
+  const { enabled, fakeFraction, fakePosition, fakeFio, fakeCallsign, fakeEmployeeId } = req.body;
+  target.fakeIdentity = {
+    enabled: !!enabled,
+    fakeFraction: fakeFraction ?? target.fakeIdentity?.fakeFraction ?? '',
+    fakePosition: fakePosition ?? target.fakeIdentity?.fakePosition ?? '',
+    fakeFio: fakeFio ?? target.fakeIdentity?.fakeFio ?? '',
+    fakeCallsign: fakeCallsign ?? target.fakeIdentity?.fakeCallsign ?? '',
+    fakeEmployeeId: fakeEmployeeId ?? target.fakeIdentity?.fakeEmployeeId ?? '',
+  };
+  await target.save();
+
+  await createLog({
+    user: req.user,
+    action: 'fake_identity_admin_update',
+    objectType: 'user',
+    objectId: target._id,
+    details: `Админ обновил фальшивое удостоверение для ${target.fio}`,
+  });
+
+  res.json({ fakeIdentity: target.fakeIdentity });
+});
+
+// PATCH /api/users/:id/status — изменение личного статуса (в т.ч. vacation, п.11)
+router.patch('/:id/status', auth, requireRole('admin', 'superadmin'), async (req, res) => {
+  const { personnelStatus, vacationUntil } = req.body;
+  const target = await User.findById(req.params.id);
+  if (!target) return res.status(404).json({ error: 'Сотрудник не найден' });
+
+  target.personnelStatus = personnelStatus || target.personnelStatus;
+  target.vacationUntil = personnelStatus === 'vacation' ? vacationUntil || null : null;
+  await target.save();
+
+  await createLog({
+    user: req.user,
+    action: 'status_change',
+    objectType: 'user',
+    objectId: target._id,
+    details: `Статус сотрудника ${target.fio} изменён на ${target.personnelStatus}`,
+  });
+
+  res.json({ user: target.toSafeJSON() });
+});
+
+// PATCH /api/users/:id/clearance — изменение УД (только выше уровнем)
+router.patch('/:id/clearance', auth, requireRole('admin', 'superadmin'), async (req, res) => {
+  const { clearanceLevel, clearanceExtensions } = req.body;
+  const target = await User.findById(req.params.id);
+  if (!target) return res.status(404).json({ error: 'Сотрудник не найден' });
+
+  const before = { level: target.clearanceLevel, ext: target.clearanceExtensions };
+  if (clearanceLevel !== undefined) target.clearanceLevel = clearanceLevel;
+  if (clearanceExtensions !== undefined) target.clearanceExtensions = clearanceExtensions;
+  await target.save();
+
+  await createLog({
+    user: req.user,
+    action: 'clearance_change',
+    objectType: 'clearance',
+    objectId: target._id,
+    details: `УД сотрудника ${target.fio} изменён: ${before.level} → ${target.clearanceLevel}`,
+    meta: { before, after: { level: target.clearanceLevel, ext: target.clearanceExtensions } },
+  });
+
+  res.json({ user: target.toSafeJSON() });
 });
 
 module.exports = router;

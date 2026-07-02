@@ -1,42 +1,35 @@
-const router = require('express').Router();
-const { auth } = require('./auth');
+const express = require('express');
+const router = express.Router();
+
 const CustomClearance = require('../models/CustomClearance');
+const { auth, requireRole } = require('../middleware/auth');
+const { EXTENSIONS, CLEARANCE_LEVELS } = require('../config/extensions');
+const createLog = require('../utils/createLog');
 
-const superOnly = (req, res, next) => {
-  if (req.user.role !== 'superadmin') return res.status(403).json({ error: 'Только суперадмин' });
-  next();
-};
-
-// Все кастомные УД
-router.get('/', auth, async (req, res) => {
-  try {
-    const list = await CustomClearance.find().sort({ level: 1 });
-    res.json(list);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+// GET /api/clearance/reference — справочник уровней и расширений для фронтенда
+router.get('/reference', auth, async (req, res) => {
+  res.json({ levels: CLEARANCE_LEVELS, extensions: Object.values(EXTENSIONS) });
 });
 
-// Создать кастомный УД
-router.post('/', auth, superOnly, async (req, res) => {
-  try {
-    const cl = await CustomClearance.create({ ...req.body, createdBy: req.user.id });
-    res.json(cl);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+// GET /api/clearance/custom — список кастомных допусков
+router.get('/custom', auth, async (req, res) => {
+  const custom = await CustomClearance.find();
+  res.json({ custom });
 });
 
-// Обновить
-router.put('/:id', auth, superOnly, async (req, res) => {
-  try {
-    const cl = await CustomClearance.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    res.json(cl);
-  } catch (e) { res.status(500).json({ error: e.message }); }
+// POST /api/clearance/custom — superadmin
+router.post('/custom', auth, requireRole('superadmin'), async (req, res) => {
+  const clearance = await CustomClearance.create(req.body);
+  await createLog({ user: req.user, action: 'custom_clearance_create', objectType: 'clearance', objectId: clearance._id, details: `Создан кастомный допуск ${clearance.name}` });
+  res.status(201).json({ clearance });
 });
 
-// Удалить
-router.delete('/:id', auth, superOnly, async (req, res) => {
-  try {
-    await CustomClearance.findByIdAndDelete(req.params.id);
-    res.json({ message: 'Удалён' });
-  } catch (e) { res.status(500).json({ error: e.message }); }
+// PATCH /api/clearance/custom/:id — superadmin
+router.patch('/custom/:id', auth, requireRole('superadmin'), async (req, res) => {
+  const clearance = await CustomClearance.findByIdAndUpdate(req.params.id, req.body, { new: true });
+  if (!clearance) return res.status(404).json({ error: 'Допуск не найден' });
+  await createLog({ user: req.user, action: 'custom_clearance_update', objectType: 'clearance', objectId: clearance._id, details: `Обновлён кастомный допуск ${clearance.name}` });
+  res.json({ clearance });
 });
 
 module.exports = router;

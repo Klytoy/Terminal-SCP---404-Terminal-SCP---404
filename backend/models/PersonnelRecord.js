@@ -1,45 +1,32 @@
 const mongoose = require('mongoose');
+const { PERSONNEL_STATUS_ENUM } = require('./User');
 
-// Отдельная запись персонала — может быть не связана с аккаунтом
-const personnelRecordSchema = new mongoose.Schema({
-  // Link to user account (optional)
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
-  
-  fio: { type: String, required: true },
-  callsign: { type: String, required: true },
-  position: { type: String, default: '' },
-  fraction: { type: String, default: '' },
-  fractionType: { type: String, enum: ['civilian', 'combat', 'general'], default: 'general' },
-  
-  clearanceLevel: { type: Number, default: 0, min: 0, max: 6 },
-  clearanceExtensions: [{ type: String }],
-  employeeId: { type: String, default: '' },
-  discordNick: { type: String, default: '' },
-  
-  // Personnel status
-  personnelStatus: {
-    type: String,
-    enum: ['active', 'inactive', 'kia', 'mia', 'suspended', 'archived', 'classified', 'fake'],
-    default: 'active'
+const noteSchema = new mongoose.Schema(
+  {
+    type: { type: String, enum: ['violation', 'commendation', 'note', 'warning'], required: true },
+    text: { type: String, required: true },
+    author: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    authorName: String,
+    createdAt: { type: Date, default: Date.now },
   },
-  
-  biography: { type: String, default: '' },
-  photo: { type: String, default: '' },
-  
-  // Service IDs
-  serviceIds: [{
-    service: String,
-    idNumber: String,
-  }],
-  
-  // Visibility
-  minClearanceToView: { type: Number, default: 0 },
-  isClassified: { type: Boolean, default: false },
-  
-  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
-});
+  { _id: true }
+);
+
+const personnelRecordSchema = new mongoose.Schema(
+  {
+    linkedUser: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    fio: { type: String, required: true },
+    callsign: String,
+    fraction: String,
+    position: String,
+    employeeId: String,
+    clearanceLevel: { type: Number, min: 0, max: 6, default: 0 },
+    personnelStatus: { type: String, enum: PERSONNEL_STATUS_ENUM, default: 'active' },
+    vacationUntil: { type: Date, default: null },
+    notes: [noteSchema],
+    minClearanceToView: { type: Number, min: 0, max: 6, default: 1 },
+  },
+  { timestamps: true }
+);
 
 module.exports = mongoose.model('PersonnelRecord', personnelRecordSchema);

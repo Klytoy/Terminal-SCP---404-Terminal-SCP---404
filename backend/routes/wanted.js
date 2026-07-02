@@ -1,47 +1,32 @@
 const express = require('express');
 const router = express.Router();
-const { auth, requireRole } = require('../middleware/auth');
+
 const WantedPerson = require('../models/WantedPerson');
+const { auth, requireRole } = require('../middleware/auth');
+const { hasExtension, isAdmin } = require('../config/extensions');
+const createLog = require('../utils/createLog');
 
-router.use(auth);
-
-router.get('/', async (req, res) => {
-  try {
-    const { status, dangerLevel } = req.query;
-    const filter = {};
-    if (status) filter.status = status;
-    if (dangerLevel) filter.dangerLevel = dangerLevel;
-    const wanted = await WantedPerson.find(filter).sort('-createdAt');
-    const result = wanted.map(w => ({
-      ...w.toObject(),
-      canAccess: req.user.role === 'superadmin' || req.user.role === 'admin' || req.user.clearanceLevel >= w.minClearanceLevel
-    }));
-    res.json(result);
-  } catch (e) { res.status(500).json({ message: 'Server error' }); }
+// GET /api/wanted
+router.get('/', auth, async (req, res) => {
+  const all = await WantedPerson.find().sort({ createdAt: -1 });
+  const canSeeNrp = isAdmin(req.user) || hasExtension(req.user, 'НРП');
+  const visible = all.filter((w) => !w.nrpVisibility || canSeeNrp);
+  res.json({ wanted: visible });
 });
 
-router.post('/', requireRole('admin', 'superadmin'), async (req, res) => {
-  try {
-    const w = new WantedPerson({ ...req.body, createdBy: req.user._id });
-    await w.save();
-    res.status(201).json(w);
-  } catch (e) { res.status(500).json({ message: e.message }); }
+// POST /api/wanted
+router.post('/', auth, requireRole('admin', 'superadmin'), async (req, res) => {
+  const wanted = await WantedPerson.create({ ...req.body, addedBy: req.user._id });
+  await createLog({ user: req.user, action: 'wanted_create', objectType: 'wanted', objectId: wanted._id, details: `Добавлена карточка розыска: ${wanted.fio}` });
+  res.status(201).json({ wanted });
 });
 
-router.patch('/:id', requireRole('admin', 'superadmin'), async (req, res) => {
-  try {
-    const w = await WantedPerson.findByIdAndUpdate(
-      req.params.id, { ...req.body, updatedAt: new Date() }, { new: true }
-    );
-    res.json(w);
-  } catch (e) { res.status(500).json({ message: 'Server error' }); }
-});
-
-router.delete('/:id', requireRole('superadmin'), async (req, res) => {
-  try {
-    await WantedPerson.findByIdAndDelete(req.params.id);
-    res.json({ message: 'Deleted' });
-  } catch (e) { res.status(500).json({ message: 'Server error' }); }
+// PATCH /api/wanted/:id
+router.patch('/:id', auth, requireRole('admin', 'superadmin'), async (req, res) => {
+  const wanted = await WantedPerson.findByIdAndUpdate(req.params.id, req.body, { new: true });
+  if (!wanted) return res.status(404).json({ error: 'Запись не найдена' });
+  await createLog({ user: req.user, action: 'wanted_update', objectType: 'wanted', objectId: wanted._id, details: `Обновлена карточка розыска: ${wanted.fio}` });
+  res.json({ wanted });
 });
 
 module.exports = router;

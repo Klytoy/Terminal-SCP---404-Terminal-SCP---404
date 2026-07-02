@@ -1,29 +1,34 @@
 const express = require('express');
 const router = express.Router();
-const { auth, requireRole } = require('../middleware/auth');
+
 const ActivityLog = require('../models/ActivityLog');
+const { auth } = require('../middleware/auth');
+const { hasExtension, isAdmin } = require('../config/extensions');
 
-router.use(auth);
-router.use(requireRole('admin', 'superadmin'));
+function canViewLogs(user) {
+  return isAdmin(user) || hasExtension(user, 'АпАИБ');
+}
 
-router.get('/', async (req, res) => {
-  try {
-    const { objectType } = req.query;
-    const filter = {};
-    if (objectType) filter.objectType = objectType;
-    const logs = await ActivityLog.find(filter)
-      .populate('user', 'username callsign employeeId')
-      .sort('-createdAt')
-      .limit(200);
-    res.json(logs);
-  } catch (e) { res.status(500).json({ message: 'Server error' }); }
+// GET /api/logs?userId=&dateFrom=&dateTo=&action=&objectType=
+router.get('/', auth, async (req, res) => {
+  if (!canViewLogs(req.user)) return res.status(403).json({ error: 'Нет доступа' });
+
+  const { userId, dateFrom, dateTo, action, objectType, limit } = req.query;
+  const filter = {};
+  if (userId) filter.user = userId;
+  if (action) filter.action = action;
+  if (objectType) filter.objectType = objectType;
+  if (dateFrom || dateTo) {
+    filter.at = {};
+    if (dateFrom) filter.at.$gte = new Date(dateFrom);
+    if (dateTo) filter.at.$lte = new Date(dateTo);
+  }
+
+  const logs = await ActivityLog.find(filter)
+    .sort({ at: -1 })
+    .limit(Math.min(parseInt(limit, 10) || 200, 1000));
+
+  res.json({ logs });
 });
 
 module.exports = router;
-
-// Helper to create logs
-module.exports.createLog = async (userId, username, action, details, objectType) => {
-  try {
-    await ActivityLog.create({ user: userId, username, action, details, objectType });
-  } catch (e) {}
-};
